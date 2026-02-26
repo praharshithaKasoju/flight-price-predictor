@@ -1,43 +1,59 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import numpy as np
 
 # --------------------------
-# 1️⃣ Load saved Random Forest model
+# Load trained Random Forest model
 # --------------------------
 rf_model = joblib.load("random_forest_model.pkl")
 
 # --------------------------
-# 2️⃣ Streamlit UI
+# Streamlit UI
 # --------------------------
 st.title("✈️ Flight Price Predictor")
 
 st.header("Flight Details")
-departure_hour = st.number_input("Departure Hour (0-23)", min_value=0, max_value=23, value=10)
-departure_min = st.number_input("Departure Minute (0-59)", min_value=0, max_value=59, value=30)
-arrival_hour = st.number_input("Arrival Hour (0-23)", min_value=0, max_value=23, value=12)
-arrival_min = st.number_input("Arrival Minute (0-59)", min_value=0, max_value=59, value=45)
-duration_hour = st.number_input("Duration Hours", min_value=0, max_value=24, value=2)
-duration_min = st.number_input("Duration Minutes", min_value=0, max_value=59, value=15)
-total_stops = st.number_input("Total Stops", min_value=0, max_value=5, value=1)
+departure_hour = st.number_input("Departure Hour (0-23)", 0, 23, 0, help="Enter hour in 24h format")
+departure_min = st.number_input("Departure Minute (0-59)", 0, 59, 0, help="Enter minute")
+arrival_hour = st.number_input("Arrival Hour (0-23)", 0, 23, 0, help="Enter hour in 24h format")
+arrival_min = st.number_input("Arrival Minute (0-59)", 0, 59, 0, help="Enter minute")
+duration_hour = st.number_input("Duration Hours", 0, 24, 0, help="Flight duration hours")
+duration_min = st.number_input("Duration Minutes", 0, 59, 0, help="Flight duration minutes")
+total_stops = st.number_input("Total Stops", 0, 5, 0, help="Number of stops during flight")
 
 st.subheader("Route Details (Optional)")
-route_1 = st.text_input("Route 1", "None")
-route_2 = st.text_input("Route 2", "None")
-route_3 = st.text_input("Route 3", "None")
-route_4 = st.text_input("Route 4", "None")
-route_5 = st.text_input("Route 5", "None")
+# Common airport codes
+airports = ["DEL", "BOM", "BLR", "MAA", "HYD", "None"]
+
+route_1 = st.selectbox("Route 1", airports)
+route_2 = st.selectbox("Route 2", airports)
+route_3 = st.selectbox("Route 3", airports)
+route_4 = st.selectbox("Route 4", airports)
+route_5 = st.selectbox("Route 5", airports)
 
 # --------------------------
-# 3️⃣ Prepare input dataframe
+# Prepare input dataframe
 # --------------------------
+# Convert hours/minutes to total minutes
+dep_total_min = departure_hour * 60 + departure_min
+arr_total_min = arrival_hour * 60 + arrival_min
+duration_total_min = duration_hour * 60 + duration_min
+
+# Cyclical encoding for hours
+dep_hour_sin = np.sin(2 * np.pi * departure_hour / 24)
+dep_hour_cos = np.cos(2 * np.pi * departure_hour / 24)
+arr_hour_sin = np.sin(2 * np.pi * arrival_hour / 24)
+arr_hour_cos = np.cos(2 * np.pi * arrival_hour / 24)
+
 input_dict = {
-    'Departure_hour': [departure_hour],
-    'Departure_min': [departure_min],
-    'Arrival_hour': [arrival_hour],
-    'Arrival_min': [arrival_min],
-    'Duration_hour': [duration_hour],
-    'Duration_min': [duration_min],
+    'Dep_total_min': [dep_total_min],
+    'Arr_total_min': [arr_total_min],
+    'Duration_total_min': [duration_total_min],
+    'Dep_hour_sin': [dep_hour_sin],
+    'Dep_hour_cos': [dep_hour_cos],
+    'Arr_hour_sin': [arr_hour_sin],
+    'Arr_hour_cos': [arr_hour_cos],
     'Total_Stops': [total_stops],
     'Route_1': [route_1],
     'Route_2': [route_2],
@@ -51,20 +67,15 @@ input_df = pd.DataFrame(input_dict)
 # One-hot encode route columns
 input_df = pd.get_dummies(input_df)
 
-# --------------------------
-# 4️⃣ Align columns with model (fill missing ones)
-# --------------------------
-# Get feature names from trained Random Forest
-model_features = rf_model.feature_names_in_  # scikit-learn ≥1.0
+# Align columns with model
+model_features = rf_model.feature_names_in_
 for col in model_features:
     if col not in input_df.columns:
         input_df[col] = 0
-
-# Reorder columns to match model
 input_df = input_df[model_features]
 
 # --------------------------
-# 5️⃣ Predict
+# Predict
 # --------------------------
 if st.button("Predict Price"):
     prediction = rf_model.predict(input_df)
